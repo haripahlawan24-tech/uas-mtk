@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dev: Salim Ubaidillah</title>
+
+<style>
+body {
+    margin:0;
+    font-family:'Poppins',sans-serif;
+    background:#e2e8f0;
+    color:#333;
+}
+.container { max-width:1100px; margin:auto; padding:20px; }
+.card {
+    background:#fff;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.08);
+    margin-bottom:14px;
+}
+.header { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+.btn{ padding:8px 14px; border:none; border-radius:8px; cursor:pointer; font-size:14px; }
+.btn-primary{ background:#4f46e5; color:#fff; }
+.select, input { padding:8px; border-radius:6px; border:1px solid #ccc; }
+.table-wrap{ overflow:auto; margin-top:12px; }
+table{ width:100%; border-collapse:collapse; background:white; }
+th, td{ padding:10px; border-bottom:1px solid #e6e6e6; text-align:left; }
+th{ background:#f3f4f6; position:sticky; top:0; z-index:10; }
+.correct{ background:#d1fad1 !important; }
+.wrong{ background:#ffd1d1 !important; }
+.small{ font-size:13px; color:#555; }
+.radio-wrap {
+    display:flex; gap:6px; margin-top:4px; font-size:12px;
+}
+/* Style untuk Print (Sembunyikan elemen non-tabel saat mencetak) */
+@media print {
+    body > :not(#print-area) {
+        display: none !important;
+    }
+    /* Pastikan tabel yang dicetak terlihat */
+    #print-area {
+        display: block !important;
+        position: static !important;
+    }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+  <div class="card header">
+    <div>
+      <h2>Mode Guru</h2>
+      <div class="small">
+        dev: Salim Ubaidillah
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; align-items:center;">
+      <select id="filterClass" class="select">
+        <option value="">Semua Kelas</option>
+        <option value="7A">7A</option>
+        <option value="7B">7B</option>
+        <option value="7C">7C</option>
+        <option value="7D">7D</option>
+      </select>
+      <input id="searchName" placeholder="Cari nama..."/>
+      <button id="refreshBtn" class="btn btn-primary">Refresh</button>
+	  <button id="exportExcel" class="btn btn-primary" style="background: green;">Export Excel</button>
+	  <button id="printBtn" class="btn btn-primary" style="background: grey;">Print</button>
+
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="small">Terakhir diperbarui: <span id="lastUpdated">-</span></div>
+      <div class="small">Menampilkan <span id="count">0</span> peserta</div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="guruTable">
+        <thead>
+          <tr>
+            <th style="width:40px; text-align:center;">No</th>
+			<th style="text-align:left;">Nama</th>
+			<th style="text-align:center;">Skor</th>
+			<th style="text-align:center;">21</th>
+			<th style="text-align:center;">22</th>
+			<th style="text-align:center;">23</th>
+			<th style="text-align:center;">24</th>
+			<th style="text-align:center;">25</th>
+			<th style="text-align:center;">Nilai Akhir</th>
+
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<div id="print-area" style="display: none;"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const firebaseConfig = {
+    databaseURL: "https://uas-mtk-default-rtdb.asia-southeast1.firebasedatabase.app/"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+/* ====== DEFINISI SOAL UNTUK HITUNG PG/PGK ====== */
+let pg = [
+    { answer: 2 },{ answer: 1 },{ answer: 2 },{ answer: 2 },{ answer: 2 },
+    { answer: 2 },{ answer: 2 },{ answer: 0 },{ answer: 1 },{ answer: 1 },
+    { answer: 2 },{ answer: 2 },{ answer: 1 },{ answer: 0 },{ answer: 0 }
+];
+let pgk = [
+    { answer:[0,3] },{ answer:[0,2] },{ answer:[0,2] },{ answer:[0,2] },{ answer:[0,2] }
+];
+let essay = [{},{},{},{},{}];
+
+const questions = [
+  ...pg.map(q=>({type:'pg', answer:q.answer})),
+  ...pgk.map(q=>({type:'pgk', answer:q.answer})),
+  ...essay.map(()=>({type:'essay'}))
+];
+
+/* ====== HITUNG SKOR PG / PGK ====== */
+function computeScoreFromJawaban(jawaban){
+    let skor = 0;
+    for(let i=0;i<questions.length;i++){
+        const q = questions[i];
+        const j = jawaban[i];
+        if(q.type === "pg" && j == q.answer) skor += 2;
+        if(q.type === "pgk" && Array.isArray(j) &&
+           j.length === q.answer.length &&
+           q.answer.every(x => j.includes(x)))
+           skor += 2;
+    }
+    return skor;
+}
+
+/* ================ DOM REF =============== */
+const tbody        = document.querySelector("#guruTable tbody");
+const lastUpdatedEl= document.getElementById("lastUpdated");
+const countEl      = document.getElementById("count");
+const filterClass  = document.getElementById("filterClass");
+const searchName   = document.getElementById("searchName");
+const refreshBtn   = document.getElementById("refreshBtn");
+const printArea    = document.getElementById("print-area");
+
+let latestData = {};
+
+/* ============= RENDER TABEL ============= */
+function renderTable(data){
+    const rows = [];
+
+    // Mengumpulkan semua data yang relevan dari Firebase
+    for(const kelasKey in data){
+        const kelasNode = data[kelasKey];
+        for(const namaKey in kelasNode){
+            const entry = kelasNode[namaKey];
+            const jawaban = entry.jawaban || {};
+
+            // Skor PG + PGK
+            const skorPG = entry.skor ?? 0;
+
+            // Skor essay manual stored: score_20 – score_24 (untuk soal no. 21-25)
+            let essayScore = 0;
+            for(let i=20;i<=24;i++){
+                essayScore += entry[`score_${i}`] || 0;
+            }
+
+            rows.push({
+                nama: namaKey,
+                kelas: kelasKey,
+                skorPG,
+                final: skorPG + essayScore,
+                jawaban,
+                scores: entry
+            });
+        }
+    }
+
+    // Filter untuk tampilan tabel (berdasarkan filterClass dan searchName)
+    const kelasFilter = filterClass.value;
+    const q = searchName.value.trim().toLowerCase();
+
+    let filtered = rows.filter(r=>{
+        if(kelasFilter && r.kelas !== kelasFilter) return false;
+        if(q && !r.nama.toLowerCase().includes(q)) return false;
+        return true;
+    });
+
+    // Render
+    tbody.innerHTML = "";
+    filtered.forEach((r, idx)=>{
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="text-align:center;">${idx+1}</td>
+            <td>${escapeHtml(r.nama)}</td>
+            <td style="text-align:center;">${r.skorPG}</td>
+
+            ${makeEssayCell(idx, r, 20)}
+            ${makeEssayCell(idx, r, 21)}
+            ${makeEssayCell(idx, r, 22)}
+            ${makeEssayCell(idx, r, 23)}
+            ${makeEssayCell(idx, r, 24)}
+
+            <td style="text-align:center;"><b>${r.final}</b></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    countEl.textContent = filtered.length;
+}
+
+/* ===== SEL JAWABAN + RADIO ===== */
+function makeEssayCell(index, r, qIndex){
+    const val = r.jawaban[qIndex] ?? "-";
+    const score = r.scores[`score_${qIndex}`] ?? 0;
+
+    return `
+        <td style="text-align:center;">
+            <div>${val}</div>
+            <div class="radio-wrap" style="justify-content:center;">
+                <label>
+                    <input type="radio" name="s_${index}_${qIndex}" value="10"
+                        ${score === 10 ? "checked":""}
+                        onclick="updateEssayScore('${r.nama}','${r.kelas}',${qIndex},10)">
+                    B
+                </label>
+                <label>
+                    <input type="radio" name="s_${index}_${qIndex}" value="0"
+                        ${score === 0 ? "checked":""}
+                        onclick="updateEssayScore('${r.nama}','${r.kelas}',${qIndex},0)">
+                    S
+                </label>
+            </div>
+        </td>
+    `;
+}
+
+function escapeHtml(text){
+    return String(text).replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ====== UPDATE SKOR ESSAY KE FIREBASE (Perbaikan dengan error handling) ====== */
+window.updateEssayScore = function(nama, kelas, qIdx, nilai){
+    const path = `jawaban/${kelas}/${nama}`;
+    const obj = {};
+    obj[`score_${qIdx}`] = nilai;
+
+    update(ref(db, path), obj).then(()=>{
+        console.log(`Skor ${nama} (${kelas}) soal ${qIdx+1} berhasil diupdate ke ${nilai}`);
+    }).catch(error => {
+        console.error("Gagal update skor essay:", error);
+        alert("Gagal menyimpan nilai ke database! Cek koneksi Anda.");
+    });
+};
+
+/* ======= LISTENER REALTIME ======= */
+const rootRef = ref(db, "jawaban");
+onValue(rootRef, snap=>{
+    latestData = snap.val() || {};
+    renderTable(latestData);
+    lastUpdatedEl.textContent = new Date().toLocaleString("id-ID");
+});
+
+/* ===== EVENT UI ===== */
+filterClass.addEventListener("change", ()=>renderTable(latestData));
+searchName.addEventListener("input", ()=>renderTable(latestData));
+
+// Tombol Refresh sekarang melakukan reload halaman penuh
+refreshBtn.addEventListener("click", ()=>{
+    window.location.reload();
+});
+
+
+renderTable({}); // Render kosong saat pertama kali loading
+
+document.getElementById("exportExcel").addEventListener("click", exportToExcel);
+
+function exportToExcel() {
+    const kelasFilter = document.getElementById("filterClass").value;
+    let rows = [];
+
+    // 1. Kumpulkan & Filter Data
+    for(const kelasKey in latestData){
+        if(kelasFilter && kelasKey !== kelasFilter) continue;
+
+        const kelasNode = latestData[kelasKey];
+        for(const namaKey in kelasNode){
+            const entry = kelasNode[namaKey];
+
+            const skorPG = entry.skor ?? 0;
+
+            let essayScore = 0;
+            for(let i=20;i<=24;i++){
+                essayScore += entry[`score_${i}`] || 0;
+            }
+
+            const finalScore = skorPG + essayScore;
+
+            rows.push({
+                No: rows.length + 1,
+                Nama: namaKey,
+                Kelas: kelasKey,
+                "Skor PG/PGK": skorPG,
+                "Skor Essay": essayScore,
+                "Nilai Akhir": finalScore
+            });
+        }
+    }
+    
+    // 2. Sortir data
+    rows.sort((a,b)=> b["Nilai Akhir"] - a["Nilai Akhir"] || a.Nama.localeCompare(b.Nama));
+
+
+    // 3. Buat dan Download File Excel
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Nilai");
+
+    const fileName = kelasFilter ? `Data_Nilai_${kelasFilter}.xlsx` : "Data_Nilai_Semua_Kelas.xlsx";
+
+    XLSX.writeFile(workbook, fileName);
+}
+
+
+document.getElementById("printBtn").addEventListener("click", printTable);
+
+function printTable() {
+    const kelasFilter = document.getElementById("filterClass").value;
+    let rows = [];
+
+    // 1. Kumpulkan & Filter Data
+    for (const kelasKey in latestData) {
+        if (kelasFilter && kelasKey !== kelasFilter) continue;
+
+        const kelasNode = latestData[kelasKey];
+        for (const namaKey in kelasNode) {
+            const entry = kelasNode[namaKey];
+
+            const skorPG = entry.skor ?? 0;
+
+            let essayScore = 0;
+            for (let i = 20; i <= 24; i++) {
+                essayScore += entry[`score_${i}`] || 0;
+            }
+
+            const finalScore = skorPG + essayScore;
+
+            rows.push({
+                nama: namaKey,
+                kelas: kelasKey,
+                skorPG: skorPG,
+                skorEssay: essayScore,
+                final: finalScore
+            });
+        }
+    }
+
+    // 2. Sortir data
+    rows.sort((a,b)=> b.final - a.final || a.nama.localeCompare(b.nama));
+
+
+    // 3. Generate HTML untuk Print
+    let printContent = `
+    <html>
+    <head>
+        <title>Cetak Nilai</title>
+        <style>
+            /* Perbaikan Margin Cetak menjadi 3cm */
+            @page { size: A4 portrait; margin: 2cm; } 
+            body { font-family: Arial, sans-serif; font-size: 10pt; }
+            h2 { text-align:center; margin-bottom:10px; font-size: 14pt; }
+            .subtitle { text-align:center; margin-bottom:15px; font-style:italic; font-size: 11pt;}
+            table { width: 100%; border-collapse: collapse; margin-top:10px; }
+            table, th, td { border: 1px solid #000; }
+            th, td { padding: 6px; text-align: left; }
+            th { background: #f0f0f0; }
+            /* Perataan data di kolom (No, Skor PG/PGK, Skor Essay, Nilai Akhir) */
+            td:nth-child(1), td:nth-child(4), td:nth-child(5), td:nth-child(6) { text-align: center; }
+        </style>
+    </head>
+    <body>
+        <h2>Daftar Nilai</h2>
+        <div class="subtitle">Kelas: ${kelasFilter || "Semua Kelas"}</div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%; text-align: center;">No</th>
+                    <th style="width: 40%;">Nama</th>
+                    <th style="width: 15%; text-align: center;">Kelas</th>
+                    <th style="width: 15%; text-align: center;">Skor PG/PGK</th>
+                    <th style="width: 10%; text-align: center;">Skor Essay</th>
+                    <th style="width: 15%; text-align: center;">Nilai Akhir</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    rows.forEach((r, i) => {
+        printContent += `
+            <tr>
+                <td>${i + 1}</td>
+                <td>${r.nama}</td>
+                <td>${r.kelas}</td>
+                <td>${r.skorPG}</td>
+                <td>${r.skorEssay}</td>
+                <td><b>${r.final}</b></td>
+            </tr>
+        `;
+    });
+
+    printContent += `
+            </tbody>
+        </table>
+    </body>
+    </html>
+    `;
+
+    // 4. Cetak (Tanpa Membuka Tab Baru)
+    printArea.innerHTML = printContent;
+    window.print();
+    printArea.innerHTML = ""; // Bersihkan setelah mencetak
+}
+
+</script>
+</body>
+</html>
