@@ -397,7 +397,7 @@ function shuffle(array) {
     }
     return array;
 }
-shuffle(pg); shuffle(pgk); shuffle(essay);
+shuffle(pg); shuffle(pgk); //shuffle(essay);
 const questions = [...pg.map(q => ({ type: "pg", ...q })), ...pgk.map(q => ({ type: "pgk", ...q })), ...essay.map(q => ({ type: "essay", ...q }))];
 
 // ================= PERHITUNGAN SKOR UPDATE =================
@@ -678,4 +678,5 @@ function showConfirm(callback) {
 }
 </script>
 </body>
+
 </html>
