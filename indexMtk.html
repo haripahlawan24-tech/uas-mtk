@@ -513,7 +513,7 @@ async function mulaiKuis() {
     if (!document.getElementById("agreeCheckbox").checked) { document.getElementById("agreeError").style.display = "block"; valid = false; }
     if (!valid) return;
 
-    if (!faceModel) {
+    /*if (!faceModel) {
         showToast("Sedang memuat AI Wajah... Tunggu sebentar.");
         await new Promise(r => setTimeout(r, 2000));
         if(!faceModel) { showToast("Gagal memuat AI. Cek koneksi internet."); return; }
@@ -527,7 +527,7 @@ async function mulaiKuis() {
     else if (document.documentElement.mozRequestFullScreen) { document.documentElement.mozRequestFullScreen(); }
     else if (document.documentElement.webkitRequestFullscreen) { document.documentElement.webkitRequestFullscreen(); }
     else if (document.documentElement.msRequestFullscreen) { document.documentElement.msRequestFullscreen(); }
-    
+    */
     DB.nama = nama.value; DB.kelas = kelas.value;
     saveToFirebase(`jawaban/${DB.kelas}/${DB.nama}`, DB);
 
@@ -680,3 +680,4 @@ function showConfirm(callback) {
 </body>
 
 </html>
+
