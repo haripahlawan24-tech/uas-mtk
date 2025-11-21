@@ -322,7 +322,7 @@ window.addEventListener('focus', () => {
 });
 
 
-/* // ================= LOAD FACE MODEL =================
+// ================= LOAD FACE MODEL =================
 async function loadFaceModel() {
     try {
         faceModel = await blazeface.load();
@@ -333,7 +333,7 @@ async function loadFaceModel() {
         showToast("Gagal memuat AI Wajah. Periksa Koneksi Internet.");
     }
 }
-window.onload = () => { loadFaceModel(); }*/
+window.onload = () => { loadFaceModel(); }
 
 // ================= DATA SOAL MATEMATIKA KELAS 7 =================
 let pg = [
@@ -513,7 +513,7 @@ async function mulaiKuis() {
     if (!document.getElementById("agreeCheckbox").checked) { document.getElementById("agreeError").style.display = "block"; valid = false; }
     if (!valid) return;
 
-    /*if (!faceModel) {
+    if (!faceModel) {
         showToast("Sedang memuat AI Wajah... Tunggu sebentar.");
         await new Promise(r => setTimeout(r, 2000));
         if(!faceModel) { showToast("Gagal memuat AI. Cek koneksi internet."); return; }
@@ -680,5 +680,6 @@ function showConfirm(callback) {
 </body>
 
 </html>
+
 
 
